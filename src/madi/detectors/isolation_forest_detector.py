@@ -13,7 +13,7 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 """Isolation Forest Anomaly Detector."""
-from madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
+from src.madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
 import numpy as np
 import pandas as pd
 import sklearn.ensemble

@@ -13,13 +13,13 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 """Imports for colab accessibility."""
-import madi.datasets.forestcover_dataset
-import madi.datasets.gaussian_mixture_dataset
-import madi.datasets.smart_buildings_dataset
-import madi.detectors.integrated_gradients_interpreter
-import madi.detectors.isolation_forest_detector
-import madi.detectors.neg_sample_neural_net_detector
-import madi.detectors.neg_sample_random_forest
-import madi.detectors.one_class_svm
-import madi.utils.evaluation_utils
-import madi.utils.sample_utils
+import src.madi.datasets.forestcover_dataset
+import src.madi.datasets.gaussian_mixture_dataset
+import src.madi.datasets.smart_buildings_dataset
+import src.madi.detectors.integrated_gradients_interpreter
+import src.madi.detectors.isolation_forest_detector
+import src.madi.detectors.neg_sample_neural_net_detector
+import src.madi.detectors.neg_sample_random_forest
+import src.madi.detectors.one_class_svm
+import src.madi.utils.evaluation_utils
+import src.madi.utils.sample_utils

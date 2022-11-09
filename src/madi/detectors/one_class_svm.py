@@ -13,8 +13,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 """Wrapper for One-Class SVM Anomaly Detector based on sklearn."""
-from madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
-import madi.utils.sample_utils as sample_utils
+from src.madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
+import src.madi.utils.sample_utils as sample_utils
 import numpy as np
 import pandas as pd
 import sklearn.svm

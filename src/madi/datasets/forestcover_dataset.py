@@ -16,8 +16,8 @@
 import os
 
 from absl import logging
-from madi.datasets.base_dataset import BaseDataset
-from madi.utils import file_utils
+from src.madi.datasets.base_dataset import BaseDataset
+from src.madi.utils import file_utils
 import numpy as np
 import pandas as pd
 import tensorflow as tf

@@ -13,8 +13,8 @@
 #     See the License for the specific language governing permissions and
 #     limitations under the License.
 """Isolation Forest Anomaly Detector."""
-from madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
-import madi.utils.sample_utils as sample_utils
+from src.madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
+import src.madi.utils.sample_utils as sample_utils
 import numpy as np
 import pandas as pd
 import sklearn.ensemble
@@ -50,6 +50,7 @@ class NegativeSamplingRandomForestAd(sklearn.ensemble.RandomForestClassifier,
     # TODO(sipple) Consolidate the normalization code into the base class.
     self._normalization_info = sample_utils.get_normalization_info(x_train)
     column_order = sample_utils.get_column_order(self._normalization_info)
+
     normalized_x_train = sample_utils.normalize(x_train[column_order],
                                                 self._normalization_info)
 

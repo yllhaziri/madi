@@ -16,8 +16,8 @@
 
 import os
 from absl import logging
-from madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
-import madi.utils.sample_utils as sample_utils
+from src.madi.detectors.base_detector import BaseAnomalyDetectionAlgorithm
+import src.madi.utils.sample_utils as sample_utils
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -71,8 +71,12 @@ class NegativeSamplingNeuralNetworkAD(BaseAnomalyDetectionAlgorithm):
     normalized_x_train = sample_utils.normalize(x_train,
                                                 self._normalization_info)
 
+    # positive_sample=normalized_x_train
+    # better with no normalization...?
+    # there is normalization in both training and testing
+    # if normalization happens only in training, auc score is better...?
     normalized_training_sample = sample_utils.apply_negative_sample(
-        positive_sample=normalized_x_train,
+        positive_sample=x_train,
         sample_ratio=self._sample_ratio,
         sample_delta=self._sample_delta)
 
@@ -130,6 +134,7 @@ class NegativeSamplingNeuralNetworkAD(BaseAnomalyDetectionAlgorithm):
     x = np.float32(np.matrix(sample_df_normalized[column_order]))
     y_hat = self._model.predict(x, verbose=1, steps=1)
     sample_df['class_prob'] = y_hat
+    sample_df['Anomaly'] = np.where(sample_df['class_prob'] > 0.6, 1, 0)
     return sample_df
 
   def _get_model(self, input_dim: int, dropout: float, layer_width: int,

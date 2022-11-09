@@ -16,7 +16,7 @@
 
 from typing import Optional, Iterable
 
-from madi.datasets.base_dataset import BaseDataset
+from src.madi.datasets.base_dataset import BaseDataset
 import numpy as np
 import pandas as pd
 
