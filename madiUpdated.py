@@ -39,16 +39,13 @@ _RESOURCE_LOCATION = "src.madi.datasets.data"
 data_source = "smart_buildings"  # @param ["gaussian_mixture", "smart_buildings"]
 ds = None
 
-
 class InvalidDatasetError(ValueError):
     pass
-
 
 if data_source == 'smart_buildings':
 
     data_file = file_utils.PackageResource(
-        _RESOURCE_LOCATION, "ahuVavBothOccModeData.csv")
-        # _RESOURCE_LOCATION, "ahuVavModelDataLABELED.csv")
+        _RESOURCE_LOCATION, "ahuvav_data_14nov.csv")
     readme_file = file_utils.PackageResource(
         _RESOURCE_LOCATION, "anomaly_detection_sample_1577622599_README.md")
     ds = SmartBuildingsDataset(data_file, readme_file)
@@ -57,18 +54,34 @@ if data_source == 'smart_buildings':
 else:
     raise InvalidDatasetError("You requested an invalid data set (%s)." % data_source)
 
-print('Randomize the data, and split into training and test sample.')
-split_ix = int(len(ds.sample) * 0.8)
-training_sample = ds.sample.iloc[:split_ix]
-test_sample = ds.sample.iloc[split_ix:]
-print("\tTraining sample size: %d" % len(training_sample))
-print("\tTest sample size: %d" % len(test_sample))
+data = ds.sample.drop('occupied_mode', axis=1)
 
-# training_sample = training_sample.dropna().astype(int)
-# test_sample = test_sample.dropna().astype(int)
+allFaults = data[data['class_label'] == 1]
 
-# training_sample = training_sample.drop('occupancy_status', axis=1)
-# test_sample = test_sample.drop('occupancy_status', axis=1)
+temp = allFaults.drop_duplicates(subset=['zone_air_temperature_sensor', 'calculated_cooling_setpoint',
+       'calculated_heating_setpoint', 'discharge_air_flowrate_sensor',
+       'discharge_air_flowrate_setpoint',
+       'discharge_damper_percentage_command',
+       'parent_discharge_air_temperature_sensor',
+       'parent_calculated_discharge_heating_setpoint',
+       'parent_calculated_discharge_cooling_setpoint',
+       'parent_discharge_air_pressure_sensor',
+       'parent_discharge_air_pressure_setpoint',
+       'parent_discharge_fan_speed_percentage_command',
+       'parent_compressor_cooling_stage_command'], keep='last')
+
+undersampledFaults = temp.drop_duplicates(subset=['temp_setpt_diff', 'flowrate_setpt_diff', 'parent_temp_setpt_diff',
+                              'parent_pressure_setpt_diff'], keep='last')
+
+faultSplits = np.array_split(undersampledFaults, 5)
+nonFault = data[data['class_label']==0]
+
+# print('Randomize the data, and split into training and test sample.')
+# split_ix = int(len(data) * 0.8)
+# training_sample = ds.sample.iloc[:split_ix]
+# test_sample = ds.sample.iloc[split_ix:]
+# print("\tTraining sample size: %d" % len(training_sample))
+# print("\tTest sample size: %d" % len(test_sample))
 
 # @title Reset Anomlay Detectors
 ad_dict = {}
@@ -109,15 +122,13 @@ else:
 
 
 # PYOD UNSUPER MODELS
-outliers_fraction = 0.05
+outliers_fraction = 0.04
 random_state = 17
 
 ad_dict['iso'] = IForest(contamination=outliers_fraction, random_state=random_state)
-# pca sometimes doesnt work. gotta check what causes it
 ad_dict['pca'] = PCA(contamination=outliers_fraction, random_state=random_state)
 ad_dict['cblof'] = CBLOF(contamination=outliers_fraction, check_estimator=False, random_state=random_state)
-# need to fix error with ecod when using ahuVavBothOccModeData
-# ad_dict['ecod'] = ECOD(contamination=outliers_fraction)
+ad_dict['ecod'] = ECOD(contamination=outliers_fraction)
 # MADI SUPER MODELS
 # @title Add in Negative Sampling Random Forest (ns-rf)
 # takes long
@@ -143,22 +154,22 @@ ad_dict['cblof'] = CBLOF(contamination=outliers_fraction, check_estimator=False,
 #     sample_ratio=nsrf_params['sample_ratio'])
 
 # @title Add in Negative Sampling Neural Net (ns-nn)
-ad_dict['ns-nn'] = NegativeSamplingNeuralNetworkAD(
-    sample_ratio=nsnn_params['sample_ratio'],
-    sample_delta=nsnn_params['sample_delta'],
-    batch_size=nsnn_params['batch_size'],
-    steps_per_epoch=nsnn_params['steps_per_epoch'],
-    epochs=nsnn_params['epochs'],
-    dropout=nsnn_params['dropout'],
-    layer_width=nsnn_params['layer_width'],
-    n_hidden_layers=nsnn_params['n_hidden_layers'],
-    log_dir=log_dir)
+# ad_dict['ns-nn'] = NegativeSamplingNeuralNetworkAD(
+#     sample_ratio=nsnn_params['sample_ratio'],
+#     sample_delta=nsnn_params['sample_delta'],
+#     batch_size=nsnn_params['batch_size'],
+#     steps_per_epoch=nsnn_params['steps_per_epoch'],
+#     epochs=nsnn_params['epochs'],
+#     dropout=nsnn_params['dropout'],
+#     layer_width=nsnn_params['layer_width'],
+#     n_hidden_layers=nsnn_params['n_hidden_layers'],
+#     log_dir=log_dir)
 
 print('Anomaly Detectors: ', list(ad_dict))
 
 # @title Execute Cross-Fold Validation {output-height:"unlimited"}
 number_crossfolds = 1  # @param {type:"integer"}
-number_folds = 5  # @param {type:"integer"}
+number_folds = 2  # @param {type:"integer"}
 
 def fold_sample(sample: pd.DataFrame, n_folds: int = 5) -> List[Dict[str, pd.DataFrame]]:
     """Splits a sample into N folds.
@@ -249,6 +260,18 @@ def plot_auc(ad_results: Dict[str, Dict[str, Dict[str, np.array]]],
 
     plt.show()
 
+def plot_sensitivity_precision(sensitivityList, precisionList, experiment_name: str):
+
+    # TBC
+
+    plt.plot(sensitivityList, precisionList)
+    plt.xlim([0.0, 1.05])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Sensitivity')
+    plt.ylabel('Precision')
+    plt.title('Precision / Sensitivity for %s' % experiment_name)
+    plt.show()
+
 def handleZeroDivisionError(n, d):
     if d == 0:
         return 'division by 0... no positives predicted'
@@ -275,68 +298,87 @@ def metrics(actual, predicted):
     return sensitivity, precision
 
 anomaly_detectors = sorted(list(ad_dict))
-experiment_name = "%s with %s" % (ds.name, ", ".join(anomaly_detectors))
+df_results = pd.DataFrame(columns=['ad', 'auc', 'sensitivity', 'precision', 'time'])
 
-df_results = pd.DataFrame(columns=['ad', 'auc', 'sensitivity', 'precision', 'extime'])
-ad_results = {}
+for i in range(len(faultSplits)):
+    print("DATA SAMPLE {}".format(i + 1))
+    sampledFault = faultSplits[i]
+    total = pd.concat([nonFault, sampledFault])
 
-for ad in anomaly_detectors:
+    modelData = total[['zone_temp_within_setpts', 'discharge_flowrate_within_setpts',
+                             'parent_discharge_temp_within_setpts',
+                             'discharge_damper_percentage_command',
+                             'parent_discharge_fan_speed_percentage_command',
+                             'parent_compressor_cooling_stage_command',
+                             'temp_setpt_diff', 'flowrate_setpt_diff', 'parent_temp_setpt_diff',
+                             'parent_discharge_pressure_within_setpts', 'parent_pressure_setpt_diff',
+                             'class_label']].dropna()
 
-    if ad not in ad_results:
-        ad_results[ad] = {}
+    ad_results = {}
+    experiment_name = "Dataset Sample %s with %s" % (i+1, ", ".join(anomaly_detectors))
 
-    for cx_run in range(number_crossfolds):
-        folds = fold_sample(ds.sample.astype(int), n_folds=number_folds)
+    sensitivityList = []
+    precisionList = []
 
-        for fid in range(number_folds):
-            fold = folds[fid]
+    for ad in anomaly_detectors:
+        print(ad)
 
-            # Drop the class label from the training sample, since this is unsupervised.
-            training_sample = fold['train'].copy()
-            testing_sample = fold['test'].copy()
-            X_train = training_sample.drop(columns=['class_label'])
-            X_test = testing_sample.drop(columns=['class_label'])
-            y_test = testing_sample['class_label']
+        if ad not in ad_results:
+            ad_results[ad] = {}
 
-            start_time = time.time()
+        for cx_run in range(number_crossfolds):
+            folds = fold_sample(modelData.astype(int), n_folds=number_folds)
 
-            # Train a model in the training split.
-            if ad in ['iso', 'ecod', 'pca', 'cblof']:
-                # X_train = X_train.astype(int)
-                # X_test = X_test.astype(int)
-                ad_dict[ad].fit(X_train)
-                y_predicted = ad_dict[ad].decision_function(X_test)
-                y_predicted_binary = ad_dict[ad].predict(X_test)
-            else:
-                ad_dict[ad].train_model(x_train=X_train)
-                preds = ad_dict[ad].predict(X_test)
-                y_predicted = preds['class_prob']
-                y_predicted_binary = preds['Anomaly']
+            for fid in range(number_folds):
+                fold = folds[fid]
 
-            # Predict on the test set.
-            # y_predicted = ad_dict[ad].predict(X_test)['class_prob']
+                # Drop the class label from the training sample, since this is unsupervised
+                training_sample = fold['train'].copy()
+                testing_sample = fold['test'].copy()
+                X_train = training_sample.drop(columns=['class_label'])
+                X_test = testing_sample.drop(columns=['class_label'])
+                y_test = testing_sample['class_label']
 
-            # Compute the AUC on the test set.
-            auc_value = evaluation_utils.compute_auc(
-                y_actual=y_test, y_predicted=y_predicted)
+                start_time = time.time()
 
-            sensitivity, precision = metrics(y_test, y_predicted_binary)
+                # Train a model in the training split
+                if ad in ['iso', 'ecod', 'pca', 'cblof']:
+                    ad_dict[ad].fit(X_train)
+                    y_predicted = ad_dict[ad].decision_function(X_test)
+                    y_predicted_binary = ad_dict[ad].predict(X_test)
+                else:
+                    ad_dict[ad].train_model(x_train=X_train)
+                    preds = ad_dict[ad].predict(X_test)
+                    y_predicted = preds['class_prob']
+                    y_predicted_binary = preds['Anomaly']
 
-            # Compute the ROC curve.
-            fpr, tpr, _ = roc_curve(y_test, y_predicted)
+                # Compute the AUC on the test set
+                auc_value = evaluation_utils.compute_auc(y_actual=y_test, y_predicted=y_predicted)
 
-            end_time = time.time()
-            extime = end_time - start_time
-            ad_results[ad]['%03d-%02d' % (cx_run, fid)] = {'fpr': fpr, 'tpr': tpr}
-            df_results.loc['%03d-%02d-%s' % (cx_run, fid, ad)] = [ad, auc_value, sensitivity, precision, extime]
+                sensitivity, precision = metrics(y_test, y_predicted_binary)
 
-            # Refresh the output area.
-            clear_output()
+                sensitivityList.append(sensitivity)
+                precisionList.append(precision)
 
-            plot_auc(ad_results, experiment_name=experiment_name)
+                # Compute the ROC curve
+                fpr, tpr, _ = roc_curve(y_test, y_predicted)
 
-            del training_sample
-            del testing_sample
+                end_time = time.time()
+                totalTime = end_time - start_time
+                ad_results[ad]['%03d-%02d' % (cx_run, fid)] = {'fpr': fpr, 'tpr': tpr, 'sensitivity': sensitivity, 'precision': precision}
+                df_results.loc['%03d-%02d-%s-%s' % (cx_run, fid, ad, i+1)] = [ad, auc_value, sensitivity, precision, totalTime]
+
+                # Refresh the output area
+                clear_output()
+
+                # plot_auc(ad_results, experiment_name)
+
+                del training_sample
+                del testing_sample
+
+            # plot_sensitivity_precision(sensitivityList, precisionList, experiment_name)
 
 print("Final Results:")
 print(df_results)
+
+aaaa = 0
